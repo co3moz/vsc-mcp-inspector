@@ -8,3 +8,5 @@
 - Tree of tools, prompts, resources and resource templates per connection, refreshed on `list_changed`.
 - Detail panels with schema-driven forms, a JSON mode, progress, cancellation and rich result rendering.
 - JSON-RPC traffic, server logs and stderr in the MCP Inspector output channel.
+- ▶ Run action on tree items that opens the panel and invokes the item with its last arguments.
+- Connection errors include the underlying cause, with a hint for malformed HTTP responses.

@@ -2,18 +2,33 @@
 
 Inspect and debug [Model Context Protocol](https://modelcontextprotocol.io) servers without leaving the editor.
 
+![Running a tool: the connection tree on the left, the generated form and the structured response on the right](images/tool-run.png)
+
 - **MCP Inspector** view in the activity bar with a **Create New Connection** button
 - Connect over **STDIO**, **SSE** or **Streamable HTTP**
 - Edit every **header** (Authorization, API keys, tenant headers, …) and **environment variable**, and enable or disable each one without deleting it
 - A connection is only added after it connects successfully. It then appears in the sidebar under the name you gave it.
 - Every **tool**, **prompt**, **resource** and **resource template** the server offers is listed under the connection
-- Click an item to see its details (description, annotations, input/output schema) and **run it**:
+- Click an item to see its details (description, annotations, input/output schema) and **run it**, or use the ▶ button next to it to run it straight away with the last arguments:
   - a form generated from the JSON Schema, or raw JSON
   - progress notifications, cancellation, duration
   - text (JSON is formatted), images, audio, embedded resources, resource links and `structuredContent`
   - raw response with **Copy** / **Open in Editor**
 - Lists refresh automatically when the server sends `list_changed` notifications
 - Every JSON-RPC message, server log and stderr line is written to the **MCP Inspector** output channel
+- Connection errors show the underlying cause (refused connections, malformed HTTP responses, the server's stderr) instead of a bare "fetch failed"
+
+![Editing a Streamable HTTP connection: transport, URL and headers that can be switched on and off](images/connection.png)
+
+## Installation
+
+Download the `.vsix` from the [latest release](https://github.com/co3moz/vsc-mcp-inspector/releases/latest) and install it:
+
+```bash
+code --install-extension vsc-mcp-inspector-<version>.vsix
+```
+
+Or use **Extensions** → **⋯** → **Install from VSIX…**.
 
 ## Usage
 
@@ -82,4 +97,16 @@ Packaging: `npm run package` creates a `.vsix`. Change `publisher` in `package.j
 
 ### CI
 
-[`.github/workflows/build.yml`](.github/workflows/build.yml) runs on every push and pull request: it type-checks, runs the core tests and packages the extension. The `.vsix` is attached to the workflow run as an artifact named `vsc-mcp-inspector-<version>-<commit>.vsix` (**Actions** → run → **Artifacts**). Install it with `code --install-extension <file>.vsix`.
+[`.github/workflows/build.yml`](.github/workflows/build.yml) runs on every push and pull request: it type-checks, runs the core tests and packages the extension. The `.vsix` is attached to the workflow run as an artifact named `vsc-mcp-inspector-<version>-<commit>.vsix` (**Actions** → run → **Artifacts**).
+
+To publish a release, bump `version` in `package.json`, commit, then push a matching tag:
+
+```bash
+git tag v0.2.0
+```
+
+```bash
+git push origin v0.2.0
+```
+
+The workflow checks that the tag matches `package.json`, builds `vsc-mcp-inspector-<version>.vsix` and attaches it to a GitHub release with generated notes.
