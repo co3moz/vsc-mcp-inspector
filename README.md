@@ -97,7 +97,7 @@ Packaging: `npm run package` creates a `.vsix`. Change `publisher` in `package.j
 
 ### CI
 
-[`.github/workflows/build.yml`](.github/workflows/build.yml) runs on every push and pull request: it type-checks, runs the core tests and packages the extension. The `.vsix` is attached to the workflow run as an artifact named `vsc-mcp-inspector-<version>-<commit>.vsix` (**Actions** → run → **Artifacts**).
+[`.github/workflows/build.yml`](.github/workflows/build.yml) runs on every push and pull request: it type-checks, runs the core tests, runs the integration tests inside VS Code 1.90.0 (the oldest supported version) and the current stable release, and packages the extension. The `.vsix` is attached to the workflow run as an artifact named `vsc-mcp-inspector-<version>-<commit>.vsix` (**Actions** → run → **Artifacts**).
 
 To publish a release, bump `version` in `package.json`, commit, then push a matching tag:
 
@@ -109,4 +109,4 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The workflow checks that the tag matches `package.json`, builds `vsc-mcp-inspector-<version>.vsix` and attaches it to a GitHub release with generated notes.
+The workflow checks that the tag matches `package.json`, builds `vsc-mcp-inspector-<version>.vsix` and, once all tests pass, attaches it to a GitHub release with generated notes.
