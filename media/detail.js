@@ -35,7 +35,16 @@ window.addEventListener('message', (event) => {
       renderHeader();
       renderParams(msg.lastArgs);
       renderSchema();
-      requestAnimationFrame(() => form?.focus());
+      requestAnimationFrame(() => (msg.autoRun ? run() : form?.focus()));
+      break;
+    case 'invoke':
+      if (msg.args) {
+        mode = 'form';
+        renderParams(msg.args);
+      }
+      if (msg.run) {
+        run();
+      }
       break;
     case 'definition': {
       const current = currentArgs(true);

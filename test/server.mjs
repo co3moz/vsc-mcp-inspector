@@ -38,6 +38,31 @@ function buildServer() {
   );
 
   server.registerTool(
+    'get_weather',
+    {
+      title: 'Get Weather',
+      description: 'Returns the current weather for a city (deterministic demo data).',
+      inputSchema: {
+        city: z.string().describe('City name, e.g. Istanbul'),
+        units: z.enum(['metric', 'imperial']).optional().describe('Temperature units'),
+      },
+      outputSchema: { city: z.string(), temperature: z.number(), units: z.string(), conditions: z.string(), humidity: z.number() },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ city, units = 'metric' }) => {
+      const seed = [...city].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+      const celsius = 8 + (seed % 20);
+      const temperature = units === 'imperial' ? Math.round(celsius * 1.8 + 32) : celsius;
+      const conditions = ['sunny', 'partly cloudy', 'light rain', 'overcast'][seed % 4];
+      const weather = { city, temperature, units, conditions, humidity: 40 + (seed % 45) };
+      return {
+        content: [{ type: 'text', text: `${city}: ${temperature}°${units === 'imperial' ? 'F' : 'C'}, ${conditions}, humidity ${weather.humidity}%` }],
+        structuredContent: weather,
+      };
+    },
+  );
+
+  server.registerTool(
     'echo_headers',
     { description: 'Returns the HTTP request headers the server received.', inputSchema: {} },
     async (_args, extra) => ({ content: [{ type: 'text', text: JSON.stringify(extra.requestInfo?.headers ?? {}) }] }),
@@ -186,6 +211,12 @@ if (mode === 'stdio') {
 
   const http = createServer(async (req, res) => {
     try {
+      if (req.url === '/broken') {
+        // Malformed response: claims chunked encoding but sends a plain body.
+        const body = JSON.stringify({ jsonrpc: '2.0', id: 0, result: {} });
+        res.socket?.end(`HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\ncontent-type: application/json\r\n\r\n${body}`);
+        return;
+      }
       if (token && req.headers.authorization !== `Bearer ${token}`) {
         res.writeHead(401, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'unauthorized' }));
         return;

@@ -146,9 +146,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 
   register('mcpInspector.showLogs', () => log.show());
 
-  register('mcpInspector.openItem', (connectionId: string, kind: ItemKind, key: string) =>
-    DetailPanel.show(context.extensionUri, manager, connectionId, kind, key),
-  );
+  /** Accepts a tree node (context menu) or explicit (connectionId, kind, key, args?) arguments. */
+  const openItem = (run: boolean) => (target?: Node | string, kind?: ItemKind, key?: string, args?: Record<string, unknown>) => {
+    const item = typeof target === 'string' && kind && key ? { id: target, kind, key } : typeof target === 'object' && target.type === 'item' ? target : undefined;
+    if (item) {
+      DetailPanel.show(context.extensionUri, manager, item.id, item.kind, item.key, { args, run });
+    }
+  };
+  register('mcpInspector.openItem', openItem(false));
+  register('mcpInspector.runItem', openItem(true));
 
   return { manager, tree, store, onDidWebviewReady: webviewReady.event };
 }

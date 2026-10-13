@@ -113,12 +113,22 @@
         "command": "mcpInspector.openItem",
         "title": "Open",
         "category": "MCP Inspector"
+      },
+      {
+        "command": "mcpInspector.runItem",
+        "title": "Run",
+        "category": "MCP Inspector",
+        "icon": "$(play)"
       }
     ],
     "menus": {
       "commandPalette": [
         {
           "command": "mcpInspector.openItem",
+          "when": "false"
+        },
+        {
+          "command": "mcpInspector.runItem",
           "when": "false"
         }
       ],
@@ -189,6 +199,21 @@
           "command": "mcpInspector.deleteConnection",
           "when": "view == mcpInspector.connections && viewItem =~ /^connection-/",
           "group": "3_edit@2"
+        },
+        {
+          "command": "mcpInspector.runItem",
+          "when": "view == mcpInspector.connections && viewItem =~ /^(tool|prompt|resource|template)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "mcpInspector.openItem",
+          "when": "view == mcpInspector.connections && viewItem =~ /^(tool|prompt|resource|template)$/",
+          "group": "1_item@1"
+        },
+        {
+          "command": "mcpInspector.runItem",
+          "when": "view == mcpInspector.connections && viewItem =~ /^(tool|prompt|resource|template)$/",
+          "group": "1_item@2"
         }
       ]
     },

@@ -25,14 +25,33 @@ export class DetailPanel {
   /** Last arguments used per item, so reopening a panel restores the form. */
   private static readonly lastArgs = new Map<string, Record<string, unknown>>();
 
-  static show(extensionUri: vscode.Uri, manager: ConnectionManager, connectionId: string, kind: ItemKind, key: string): void {
+  /**
+   * Opens (or reveals) the panel for an item. `args` pre-fills the form; `run` invokes the item
+   * right away with those arguments, or with the ones used last time.
+   */
+  static show(
+    extensionUri: vscode.Uri,
+    manager: ConnectionManager,
+    connectionId: string,
+    kind: ItemKind,
+    key: string,
+    options: { args?: Record<string, unknown>; run?: boolean } = {},
+  ): void {
     const panelKey = `${connectionId}|${kind}|${key}`;
+    if (options.args) {
+      DetailPanel.lastArgs.set(panelKey, options.args);
+    }
     const open = DetailPanel.panels.get(panelKey);
     if (open) {
       open.panel.reveal();
+      if (options.run || options.args) {
+        open.post({ type: 'invoke', args: options.args, run: !!options.run });
+      }
       return;
     }
-    DetailPanel.panels.set(panelKey, new DetailPanel(panelKey, extensionUri, manager, connectionId, kind, key));
+    const panel = new DetailPanel(panelKey, extensionUri, manager, connectionId, kind, key);
+    panel.runOnInit = !!options.run;
+    DetailPanel.panels.set(panelKey, panel);
   }
 
   static disposeFor(connectionId: string): void {
@@ -47,6 +66,7 @@ export class DetailPanel {
   private readonly runs = new Map<string, AbortController>();
   private readonly disposables: vscode.Disposable[] = [];
   private lastDefinition = '';
+  private runOnInit = false;
 
   private constructor(
     private readonly panelKey: string,
@@ -130,7 +150,9 @@ export class DetailPanel {
       definition,
       connection: this.connectionState(session),
       lastArgs: DetailPanel.lastArgs.get(this.panelKey),
+      autoRun: this.runOnInit,
     });
+    this.runOnInit = false;
   }
 
   /** Pushes connection status, and the definition when the server changed it. */

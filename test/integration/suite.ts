@@ -58,12 +58,12 @@ export async function run(): Promise<void> {
       const [connection] = await tree.getChildren();
       const item = tree.getTreeItem(connection);
       assert.equal(item.contextValue, 'connection-connected');
-      assert.match(String(item.description), /STDIO · 8 tools/);
+      assert.match(String(item.description), /STDIO · 9 tools/);
 
       assert.deepEqual(await labels(connection), ['Tools', 'Prompts', 'Resources', 'Resource Templates']);
       const [toolsGroup] = await tree.getChildren(connection);
       const tools = await tree.getChildren(toolsGroup);
-      assert.equal(tools.length, 8);
+      assert.equal(tools.length, 9);
       const echo = tools.find((n) => tree.getTreeItem(n).label === 'echo')!;
       const echoItem = tree.getTreeItem(echo);
       assert.equal(echoItem.description, 'Echo');
@@ -79,6 +79,14 @@ export async function run(): Promise<void> {
       await vscode.commands.executeCommand(command.command, ...(command.arguments ?? []));
       await waitFor(() => webviewTabs().includes('echo · Local test server'));
       await waitFor(() => readyWebviews.includes('echo · Local test server'), 15000);
+    }],
+
+    ['runs a tool from the tree with the given arguments', async () => {
+      await vscode.commands.executeCommand('mcpInspector.runItem', stdioId, 'tool', 'get_weather', { city: 'Ankara' });
+      await waitFor(() => readyWebviews.includes('get_weather · Local test server'), 15000);
+      // Context menu invocations pass the tree node instead of explicit arguments.
+      await vscode.commands.executeCommand('mcpInspector.runItem', { type: 'item', id: stdioId, kind: 'tool', key: 'echo' } satisfies Node);
+      await waitFor(() => webviewTabs().filter((t) => t === 'echo · Local test server').length === 1);
     }],
 
     ['persists connections with secrets kept separately', async () => {

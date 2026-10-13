@@ -262,6 +262,19 @@ export class McpSession {
     if (typeof code === 'number' && !message.includes(String(code))) {
       message = `${message} (code ${code})`;
     }
+    // fetch() reports most network failures as a bare "fetch failed" / "terminated" and keeps
+    // the actual reason (ECONNREFUSED, HTTP parser errors, ...) in `cause`.
+    let cause = (err as { cause?: unknown })?.cause;
+    for (let depth = 0; cause instanceof Error && depth < 3; depth++) {
+      if (cause.message && !message.includes(cause.message)) {
+        message += `: ${cause.message}`;
+      }
+      cause = (cause as { cause?: unknown }).cause;
+    }
+    if (/does not match the HTTP\/1\.1 protocol/i.test(message)) {
+      message +=
+        '\n\nThe server sent a malformed HTTP response. A common cause is a "Transfer-Encoding: chunked" header on a body that is not actually chunked.';
+    }
     if (this.config.transport === 'stdio' && this.stderrTail.length) {
       message += `\n\nServer stderr:\n${this.stderrTail.join('\n')}`;
     }

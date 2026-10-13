@@ -57,7 +57,7 @@ describe('stdio transport', () => {
     assert.equal(session.instructions, 'Test server for the VS Code MCP Inspector.');
     assert.deepEqual(
       session.tools.map((t) => t.name).sort(),
-      ['add', 'complex_input', 'crash', 'echo', 'echo_headers', 'fail', 'slow', 'tiny_image'],
+      ['add', 'complex_input', 'crash', 'echo', 'echo_headers', 'fail', 'get_weather', 'slow', 'tiny_image'],
     );
     assert.deepEqual(session.prompts.map((p) => p.name), ['greeting']);
     assert.deepEqual(session.resources.map((r) => r.uri).sort(), ['test://logo', 'test://readme']);
@@ -75,6 +75,8 @@ describe('stdio transport', () => {
     assert.deepEqual(JSON.parse(textOf(complex)!), { name: 'x', count: 3, mode: 'safe', tags: ['a'], options: { depth: 2 } });
     const image = await session.callTool('tiny_image', {});
     assert.equal(image.content[1].type, 'image');
+    const weather = await session.callTool('get_weather', { city: 'Istanbul', units: 'metric' });
+    assert.equal((weather.structuredContent as { city: string }).city, 'Istanbul');
     const failed = await session.callTool('fail', {});
     assert.equal(failed.isError, true);
   });
@@ -179,7 +181,7 @@ describe('HTTP transports', () => {
         try {
           await session.connect();
           assert.equal(session.status, 'connected');
-          assert.equal(session.tools.length, 8);
+          assert.equal(session.tools.length, 9);
 
           const headers = JSON.parse(textOf(await session.callTool('echo_headers', {}))!);
           assert.equal(headers['x-custom'], 'hello');
@@ -201,6 +203,12 @@ describe('HTTP transports', () => {
       });
     });
   }
+
+  it('explains malformed HTTP responses instead of a bare "terminated"', async () => {
+    const session = new McpSession({ id: 'broken', name: 'broken', transport: 'http', url: `http://127.0.0.1:${PORT}/broken`, headers: [] }, host);
+    await assert.rejects(session.connect(), /HTTP\/1\.1 protocol[\s\S]*Transfer-Encoding: chunked/);
+    assert.equal(session.status, 'error');
+  });
 
   it('rejects an invalid URL', async () => {
     const session = new McpSession({ id: 'bad', name: 'bad', transport: 'http', url: 'not a url', headers: [] }, host);
