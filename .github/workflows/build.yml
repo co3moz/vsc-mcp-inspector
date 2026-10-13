@@ -3,6 +3,7 @@ name: Build VSIX
 on:
   push:
     branches: ['**']
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -17,6 +18,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      file: ${{ steps.package.outputs.file }}
     steps:
       - uses: actions/checkout@v7
 
@@ -28,6 +31,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check that the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version. Bump the version before tagging."
+            exit 1
+          fi
+
       - name: Type-check
         run: npm run check
 
@@ -38,7 +50,11 @@ jobs:
         id: package
         run: |
           version=$(node -p "require('./package.json').version")
-          file="vsc-mcp-inspector-${version}-${GITHUB_SHA::7}.vsix"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            file="vsc-mcp-inspector-${version}.vsix"
+          else
+            file="vsc-mcp-inspector-${version}-${GITHUB_SHA::7}.vsix"
+          fi
           npx vsce package --no-dependencies --skip-license --out "$file"
           echo "file=$file" >> "$GITHUB_OUTPUT"
 
@@ -48,3 +64,26 @@ jobs:
           path: ${{ steps.package.outputs.file }}
           archive: false
           if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.file }}
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FILE: ${{ needs.build.outputs.file }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$FILE" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$GITHUB_REF_NAME" "$FILE" --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+          fi
