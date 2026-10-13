@@ -79,3 +79,7 @@ npm run test:integration   # inside VS Code (set VSCODE_EXECUTABLE to use an ins
 ```
 
 Packaging: `npm run package` creates a `.vsix`. Change `publisher` in `package.json` to your Marketplace publisher ID before publishing.
+
+### CI
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) runs on every push and pull request: it type-checks, runs the core tests and packages the extension. The `.vsix` is attached to the workflow run as an artifact named `vsc-mcp-inspector-<version>-<commit>.vsix` (**Actions** → run → **Artifacts**). Install it with `code --install-extension <file>.vsix`.
