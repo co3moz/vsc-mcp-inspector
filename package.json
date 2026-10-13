@@ -4,6 +4,14 @@
   "description": "Connect to Model Context Protocol servers over stdio, SSE or Streamable HTTP, browse their tools, prompts and resources, and invoke them from VS Code.",
   "version": "0.1.0",
   "publisher": "co3moz",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/co3moz/vsc-mcp-inspector.git"
+  },
+  "bugs": {
+    "url": "https://github.com/co3moz/vsc-mcp-inspector/issues"
+  },
+  "homepage": "https://github.com/co3moz/vsc-mcp-inspector#readme",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -210,7 +218,7 @@
     "test:core": "node test/run-core.mjs",
     "test:integration": "node test/run-integration.mjs",
     "test-server": "node test/server.mjs http 3001",
-    "package": "vsce package --no-dependencies --skip-license --allow-missing-repository"
+    "package": "vsce package --no-dependencies --skip-license"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
