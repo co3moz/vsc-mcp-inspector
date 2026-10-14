@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- Source for resources/icon.png (Marketplace icon). Same motif as mcp-inspector.svg. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2F7BF5"/>
+      <stop offset="1" stop-color="#6B3FD9"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#shine)"/>
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="112" cy="112" r="64" stroke-width="16"/>
+    <path d="M160 160 L204 204" stroke-width="24"/>
+    <path d="M100 104 V84 M124 104 V84" stroke-width="9"/>
+    <path d="M112 140 V158" stroke-width="9"/>
+  </g>
+  <rect x="86" y="102" width="52" height="40" rx="10" fill="#FFFFFF"/>
+</svg>

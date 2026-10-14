@@ -55,7 +55,7 @@ jobs:
           else
             file="vsc-mcp-inspector-${version}-${GITHUB_SHA::7}.vsix"
           fi
-          npx vsce package --no-dependencies --skip-license --out "$file"
+          npx vsce package --no-dependencies --out "$file"
           echo "file=$file" >> "$GITHUB_OUTPUT"
 
       - name: Upload VSIX
@@ -114,12 +114,19 @@ jobs:
           fi
 
   marketplace:
-    # Publishes the tested VSIX with Marketplace trusted publishing (OIDC): no stored token.
-    # Requires a trusted publishing policy for this repository and workflow on the publisher.
+    # Publishes the tested VSIX to the Visual Studio Marketplace. Authentication, first match wins:
+    #   1. Microsoft Entra ID (recommended): repository variables AZURE_CLIENT_ID and AZURE_TENANT_ID
+    #      of an app registration with a federated credential for the "marketplace" environment.
+    #      No secret is stored; the app is a Contributor member of the publisher.
+    #   2. VSCE_PAT secret: an Azure DevOps PAT. Global PATs stop working on 2026-12-01.
+    # Marketplace trusted publishing (vsce publish --oidc) is not available on the Marketplace yet.
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [build, integration]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment:
+      name: marketplace
+      url: https://marketplace.visualstudio.com/items?itemName=co3moz.vsc-mcp-inspector
     permissions:
       contents: read
       id-token: write
@@ -138,7 +145,34 @@ jobs:
         with:
           name: ${{ needs.build.outputs.file }}
 
+      - name: Sign in to Microsoft Entra ID
+        if: vars.AZURE_CLIENT_ID != ''
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Show the Marketplace identity
+        if: vars.AZURE_CLIENT_ID != ''
+        run: |
+          # 499b84ac-... is the Azure DevOps / Marketplace resource.
+          id=$(az rest --resource 499b84ac-1321-427f-aa17-267ca6975798 --query id -o tsv \
+            -u https://app.vssps.visualstudio.com/_apis/profile/profiles/me)
+          echo "Marketplace identity ID: $id"
+          echo "::notice title=Marketplace identity::$id (add it as a Contributor member of the co3moz publisher)"
+
       - name: Publish to the Visual Studio Marketplace
         env:
           FILE: ${{ needs.build.outputs.file }}
-        run: npx vsce publish --oidc --packagePath "$FILE" --skip-duplicate
+          USE_ENTRA: ${{ vars.AZURE_CLIENT_ID != '' }}
+          PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ "$USE_ENTRA" = "true" ]; then
+            npx vsce publish --azure-credential --packagePath "$FILE" --skip-duplicate
+          elif [ -n "$PAT" ]; then
+            VSCE_PAT="$PAT" npx vsce publish --packagePath "$FILE" --skip-duplicate
+          else
+            echo "::error::No Marketplace credentials: set the AZURE_CLIENT_ID and AZURE_TENANT_ID repository variables (Microsoft Entra ID) or the VSCE_PAT secret. See README > Marketplace publishing setup."
+            exit 1
+          fi

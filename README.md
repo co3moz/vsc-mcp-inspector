@@ -113,9 +113,17 @@ The workflow checks that the tag matches `package.json`, builds `vsc-mcp-inspect
 
 #### Marketplace publishing setup
 
-Publishing uses Marketplace [trusted publishing](https://github.com/microsoft/vscode-vsce#trusted-publishing) (`vsce publish --oidc`): GitHub Actions exchanges a short-lived OIDC token for a Marketplace credential, so no Personal Access Token is stored. One-time setup:
+The `marketplace` job only runs for `v*` tags, after the build and integration tests pass, in the `marketplace` GitHub environment. The first publish creates the extension; no manual upload is needed. Re-running it for a version that is already published is a no-op (`--skip-duplicate`). It authenticates with the first of these that is configured:
 
-1. Create the publisher `co3moz` (the `publisher` in `package.json`) at <https://marketplace.visualstudio.com/manage>.
-2. In the publisher's settings, add a trusted publishing policy for the repository `co3moz/vsc-mcp-inspector` and the workflow `.github/workflows/build.yml`.
+**Microsoft Entra ID (recommended, no stored secret)**
 
-The `marketplace` job only runs for `v*` tags, after the build and integration tests pass. Re-running it for a version that is already published is a no-op (`--skip-duplicate`).
+1. In the [Azure portal](https://portal.azure.com) → **Microsoft Entra ID** → **App registrations** → **New registration** (for example `vsc-mcp-inspector-publisher`, single tenant). No Azure subscription is needed.
+2. In the app → **Certificates & secrets** → **Federated credentials** → **Add credential** → *GitHub Actions deploying Azure resources*: organization `co3moz`, repository `vsc-mcp-inspector`, entity type **Environment**, environment `marketplace`.
+3. In the GitHub repository → **Settings** → **Secrets and variables** → **Actions** → **Variables**, add `AZURE_CLIENT_ID` (the app's *Application (client) ID*) and `AZURE_TENANT_ID` (*Directory (tenant) ID*).
+4. Push a tag. The **Show the Marketplace identity** step prints the app's Marketplace identity ID. The first publish fails until you add that ID under **Members** of the publisher at <https://marketplace.visualstudio.com/manage/publishers/co3moz> with the **Contributor** role; then re-run the job.
+
+**Personal Access Token (quick start)**
+
+Create an Azure DevOps PAT with organization *All accessible organizations* and scope **Marketplace → Manage**, and store it as the `VSCE_PAT` repository secret. Azure DevOps retires these global PATs on 2026-12-01, so switch to Entra ID before then.
+
+Marketplace [trusted publishing](https://github.com/microsoft/vscode-vsce#trusted-publishing) (`vsce publish --oidc`) is supported by `vsce` but not yet enabled on the Marketplace; the workflow can switch to it once it is.

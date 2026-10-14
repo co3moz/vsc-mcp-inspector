@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Renamed to **MCP Server Inspector** on the Marketplace ("MCP Inspector" is taken by another extension). The activity bar view keeps the short name.
+- Extension icon.
+- Licensed under MIT.
 
 ## 0.1.0
 

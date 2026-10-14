@@ -5,4 +5,5 @@
 !LICENSE
 !dist/extension.js
 !media/**
-!resources/**
+!resources/icon.png
+!resources/mcp-inspector.svg
