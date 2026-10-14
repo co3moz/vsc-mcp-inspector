@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Renamed to **MCP Server Inspector** on the Marketplace ("MCP Inspector" is taken by another extension). The activity bar view keeps the short name.
+
 ## 0.1.0
 
 - MCP Inspector view in the activity bar.

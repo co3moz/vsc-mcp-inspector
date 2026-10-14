@@ -1,4 +1,4 @@
-# MCP Inspector for VS Code
+# MCP Server Inspector for VS Code
 
 Inspect and debug [Model Context Protocol](https://modelcontextprotocol.io) servers without leaving the editor.
 
@@ -22,7 +22,7 @@ Inspect and debug [Model Context Protocol](https://modelcontextprotocol.io) serv
 
 ## Installation
 
-Download the `.vsix` from the [latest release](https://github.com/co3moz/vsc-mcp-inspector/releases/latest) and install it:
+Search for **MCP Server Inspector** in the Extensions view, or download the `.vsix` from the [latest release](https://github.com/co3moz/vsc-mcp-inspector/releases/latest) and install it:
 
 ```bash
 code --install-extension vsc-mcp-inspector-<version>.vsix
@@ -109,4 +109,13 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The workflow checks that the tag matches `package.json`, builds `vsc-mcp-inspector-<version>.vsix` and, once all tests pass, attaches it to a GitHub release with generated notes.
+The workflow checks that the tag matches `package.json`, builds `vsc-mcp-inspector-<version>.vsix` and, once all tests pass, attaches it to a GitHub release with generated notes and publishes it to the Visual Studio Marketplace.
+
+#### Marketplace publishing setup
+
+Publishing uses Marketplace [trusted publishing](https://github.com/microsoft/vscode-vsce#trusted-publishing) (`vsce publish --oidc`): GitHub Actions exchanges a short-lived OIDC token for a Marketplace credential, so no Personal Access Token is stored. One-time setup:
+
+1. Create the publisher `co3moz` (the `publisher` in `package.json`) at <https://marketplace.visualstudio.com/manage>.
+2. In the publisher's settings, add a trusted publishing policy for the repository `co3moz/vsc-mcp-inspector` and the workflow `.github/workflows/build.yml`.
+
+The `marketplace` job only runs for `v*` tags, after the build and integration tests pass. Re-running it for a version that is already published is a no-op (`--skip-duplicate`).
