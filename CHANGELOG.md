@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.3
 
 - Arrays in the generated form: add, remove and reorder items, with compact rows for strings and numbers.
 - `oneOf` / `anyOf` objects get a variant picker driven by the discriminator property (e.g. `type`); values carry over when switching.
