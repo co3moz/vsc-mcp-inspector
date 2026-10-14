@@ -37,7 +37,7 @@ export async function run(): Promise<void> {
   const tests: Test[] = [
     ['contributes the commands and the view', async () => {
       const commands = await vscode.commands.getCommands(true);
-      for (const id of ['createConnection', 'editConnection', 'deleteConnection', 'connect', 'disconnect', 'reconnect', 'refresh', 'openItem', 'showLogs']) {
+      for (const id of ['createConnection', 'editConnection', 'deleteConnection', 'connect', 'disconnect', 'reconnect', 'refresh', 'openItem', 'showLogs', 'search', 'clearSearch', 'sort']) {
         assert.ok(commands.includes(`mcpInspector.${id}`), `mcpInspector.${id} registered`);
       }
       await vscode.commands.executeCommand('workbench.view.extension.mcpInspector');
@@ -92,6 +92,67 @@ export async function run(): Promise<void> {
       // Context menu invocations pass the tree node instead of explicit arguments.
       await vscode.commands.executeCommand('mcpInspector.runItem', { type: 'item', id: stdioId, kind: 'tool', key: 'echo' } satisfies Node);
       await waitFor(() => webviewTabs().filter((t) => t === 'echo · Local test server').length === 1);
+    }],
+
+    ['searches items by name, title and URI', async () => {
+      const [connection] = await tree.getChildren();
+      try {
+        await vscode.commands.executeCommand('mcpInspector.search', 'ECHO');
+        const groups = await tree.getChildren(connection);
+        assert.deepEqual(await labels(connection), ['Tools']);
+        assert.equal(tree.getTreeItem(groups[0]).description, '2 of 10');
+        assert.deepEqual(await labels(groups[0]), ['echo', 'echo_headers']);
+        assert.equal(tree.matchCount(), 2);
+
+        await vscode.commands.executeCommand('mcpInspector.search', 'get weather');
+        assert.deepEqual(await labels((await tree.getChildren(connection))[0]), ['get_weather']);
+
+        // Groups with matches are expanded while searching, including those collapsed by default.
+        await vscode.commands.executeCommand('mcpInspector.search', 'greet');
+        const [prompts] = await tree.getChildren(connection);
+        assert.equal(tree.getTreeItem(prompts).label, 'Prompts');
+        assert.equal(tree.getTreeItem(prompts).collapsibleState, vscode.TreeItemCollapsibleState.Expanded);
+
+        await vscode.commands.executeCommand('mcpInspector.search', 'test://');
+        assert.deepEqual(await labels(connection), ['Resources', 'Resource Templates']);
+
+        await vscode.commands.executeCommand('mcpInspector.search', 'no-such-item');
+        assert.deepEqual(await labels(connection), ['No matches for “no-such-item”']);
+        assert.equal(tree.matchCount(), 0);
+      } finally {
+        await vscode.commands.executeCommand('mcpInspector.clearSearch');
+      }
+      assert.equal(tree.filter, '');
+      assert.deepEqual(await labels(connection), ['Tools', 'Prompts', 'Resources', 'Resource Templates']);
+      assert.equal(tree.getTreeItem((await tree.getChildren(connection))[0]).description, '10');
+    }],
+
+    ['sorts items by name', async () => {
+      const toolLabels = async () => {
+        const [connection] = await tree.getChildren();
+        return labels((await tree.getChildren(connection))[0]);
+      };
+      const serverOrder = await toolLabels();
+      const ascending = ['add', 'automate', 'complex_input', 'crash', 'echo', 'echo_headers', 'fail', 'get_weather', 'slow', 'tiny_image'];
+      assert.notDeepEqual(serverOrder, ascending);
+      try {
+        await vscode.commands.executeCommand('mcpInspector.sort', 'ascending');
+        assert.equal(vscode.workspace.getConfiguration('mcpInspector').get('sortOrder'), 'ascending');
+        assert.deepEqual(await toolLabels(), ascending);
+
+        await vscode.commands.executeCommand('mcpInspector.sort', 'descending');
+        assert.deepEqual(await toolLabels(), [...ascending].reverse());
+
+        await vscode.commands.executeCommand('mcpInspector.search', 'echo');
+        assert.deepEqual(await toolLabels(), ['echo_headers', 'echo']);
+        await vscode.commands.executeCommand('mcpInspector.clearSearch');
+
+        await vscode.commands.executeCommand('mcpInspector.sort', 'none');
+        assert.deepEqual(await toolLabels(), serverOrder);
+      } finally {
+        await vscode.commands.executeCommand('mcpInspector.clearSearch');
+        await vscode.workspace.getConfiguration('mcpInspector').update('sortOrder', undefined, vscode.ConfigurationTarget.Global);
+      }
     }],
 
     ['persists connections with secrets kept separately', async () => {

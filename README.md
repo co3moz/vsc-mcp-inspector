@@ -9,6 +9,7 @@ Inspect and debug [Model Context Protocol](https://modelcontextprotocol.io) serv
 - Edit every **header** (Authorization, API keys, tenant headers, …) and **environment variable**, and enable or disable each one without deleting it
 - A connection is only added after it connects successfully. It then appears in the sidebar under the name you gave it.
 - Every **tool**, **prompt**, **resource** and **resource template** the server offers is listed under the connection
+- **Search** them by name, title or URI, and **sort** them by name instead of the server's order
 - Click an item to see its details (description, annotations, input/output schema) and **run it**, or use the ▶ button next to it to run it straight away with the last arguments:
   - a form generated from the JSON Schema: nested objects, **arrays** with add / remove / reorder, and **`oneOf` / `anyOf`** variants picked by their discriminator (e.g. `"type": "click"`)
   - or a **JSON editor** with syntax highlighting, completion of property names, values and whole variant templates from the schema (<kbd>Ctrl</kbd>+<kbd>Space</kbd>), hover documentation and schema validation
@@ -46,6 +47,12 @@ Or use **Extensions** → **⋯** → **Install from VSIX…**.
 
 Right-click a connection to connect, disconnect, reconnect, edit, delete it or show server info.
 
+### Searching and sorting
+
+Click **Search** (magnifier) in the view's title bar and type: the tree only shows the tools, prompts, resources and templates whose name, title or URI contains the text, with the groups expanded and the number of matches next to each group. The filter stays when the input closes; **Clear Search** in the title bar shows everything again.
+
+Items are listed in the order the server returns them. **Change Sort Order** in the title bar sorts them by name, A → Z or Z → A; the choice is saved in the `mcpInspector.sortOrder` setting.
+
 ### Reading a tool result
 
 A tool call returns a `CallToolResult` with these parts, shown separately:
@@ -77,6 +84,7 @@ Connection settings are kept in VS Code's global state. Header and environment v
 | --- | --- | --- |
 | `mcpInspector.requestTimeout` | `60` | Timeout in seconds for connecting and for each request. Progress notifications reset it. |
 | `mcpInspector.logTraffic` | `true` | Log every JSON-RPC message to the output channel. |
+| `mcpInspector.sortOrder` | `none` | Order of tools, prompts and resources in the tree: `none` (as the server lists them), `ascending` or `descending` by name. |
 
 ## Feedback
 
