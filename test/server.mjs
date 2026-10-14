@@ -62,6 +62,44 @@ function buildServer() {
     },
   );
 
+  const point = z.number().int().min(0).max(65535);
+  const action = z.discriminatedUnion('type', [
+    z.object({ type: z.literal('move'), x: point, y: point }).describe('Move the pointer to absolute coordinates.'),
+    z
+      .object({ type: z.literal('click'), x: point, y: point, button: z.enum(['left', 'middle', 'right']).optional(), count: z.number().int().min(1).max(3).optional() })
+      .describe('Click at a position.'),
+    z.object({ type: z.literal('type_text'), text: z.string() }).describe('Type text; a newline presses Enter.'),
+    z.object({ type: z.literal('key_press'), keys: z.array(z.string()) }).describe('Press keys together, e.g. ["ctrl", "c"].'),
+    z.object({ type: z.literal('wait'), milliseconds: z.number().int().min(0) }).describe('Pause before the next action.'),
+  ]);
+  server.registerTool(
+    'automate',
+    {
+      title: 'Automate',
+      description: 'Runs a list of input actions (demo: nothing is executed) and reports what would happen.',
+      inputSchema: {
+        actions: z.array(action).describe('Actions to perform in order.'),
+        capture: z
+          .object({
+            max_width: z.number().int().min(16).nullable().optional().describe('Scale the screenshot down to this width.'),
+            region: z.string().nullable().optional().describe('Crop to "x,y,width,height".'),
+          })
+          .optional()
+          .describe('Screenshot options.'),
+        settle_ms: z.number().int().min(0).max(10000).optional().describe('Milliseconds to wait before capturing.'),
+      },
+      outputSchema: { performed: z.number().int(), summary: z.array(z.string()) },
+    },
+    async ({ actions }) => {
+      const summary = actions.map((a) =>
+        a.type === 'move' || a.type === 'click' ? `${a.type} at ${a.x},${a.y}` : a.type === 'type_text' ? `type ${JSON.stringify(a.text)}` : a.type === 'key_press' ? `press ${a.keys.join('+')}` : `wait ${a.milliseconds} ms`,
+      );
+      const result = { performed: actions.length, summary };
+      // Like many servers, repeat the structured result as JSON text for clients without structuredContent support.
+      return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
+    },
+  );
+
   server.registerTool(
     'echo_headers',
     { description: 'Returns the HTTP request headers the server received.', inputSchema: {} },

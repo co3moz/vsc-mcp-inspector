@@ -10,13 +10,16 @@ Inspect and debug [Model Context Protocol](https://modelcontextprotocol.io) serv
 - A connection is only added after it connects successfully. It then appears in the sidebar under the name you gave it.
 - Every **tool**, **prompt**, **resource** and **resource template** the server offers is listed under the connection
 - Click an item to see its details (description, annotations, input/output schema) and **run it**, or use the ▶ button next to it to run it straight away with the last arguments:
-  - a form generated from the JSON Schema, or raw JSON
+  - a form generated from the JSON Schema: nested objects, **arrays** with add / remove / reorder, and **`oneOf` / `anyOf`** variants picked by their discriminator (e.g. `"type": "click"`)
+  - or a **JSON editor** with syntax highlighting, completion of property names, values and whole variant templates from the schema (<kbd>Ctrl</kbd>+<kbd>Space</kbd>), hover documentation and schema validation
   - progress notifications, cancellation, duration
-  - text (JSON is formatted), images, audio, embedded resources, resource links and `structuredContent`
+  - text, images, audio, embedded resources, resource links and `structuredContent`; JSON is shown in a read-only editor with folding
   - raw response with **Copy** / **Open in Editor**
 - Lists refresh automatically when the server sends `list_changed` notifications
 - Every JSON-RPC message, server log and stderr line is written to the **MCP Inspector** output channel
 - Connection errors show the underlying cause (refused connections, malformed HTTP responses, the server's stderr) instead of a bare "fetch failed"
+
+![Building an array of oneOf actions with the generated form](images/automate.png)
 
 ![Editing a Streamable HTTP connection: transport, URL and headers that can be switched on and off](images/connection.png)
 
@@ -42,6 +45,14 @@ Or use **Extensions** → **⋯** → **Install from VSIX…**.
 5. Expand the connection and click a tool to open it. Fill in the parameters and press **Run Tool** (<kbd>Ctrl</kbd>+<kbd>Enter</kbd>).
 
 Right-click a connection to connect, disconnect, reconnect, edit, delete it or show server info.
+
+### Reading a tool result
+
+A tool call returns a `CallToolResult` with these parts, shown separately:
+
+- **content** – blocks meant for the model: `text`, `image`, `audio`, embedded `resource` and `resource_link`.
+- **structuredContent** – a JSON object for programs, validated against the tool's `outputSchema`. The MCP spec asks tools that return it to also put the same JSON in a `text` block for older clients; when the two match, the text block is collapsed as "same JSON as structuredContent".
+- **Raw result** – the whole `result` object of the JSON-RPC response exactly as received (including `isError` and `_meta`), useful for debugging the server. Long strings such as base64 images are shortened in the view; Copy and Open in Editor keep them intact.
 
 ### Variables
 

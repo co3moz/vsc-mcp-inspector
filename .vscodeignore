@@ -4,6 +4,7 @@
 !CHANGELOG.md
 !LICENSE
 !dist/extension.js
+!dist/webview/jsonEditor.js
 !media/**
 !resources/icon.png
 !resources/mcp-inspector.svg

@@ -640,3 +640,97 @@ details > .details-body {
   border-radius: 3px;
   color: var(--muted);
 }
+
+/* ---------- JSON editor, arrays and unions ---------- */
+
+.json-host,
+.json-view {
+  min-width: 0;
+}
+
+.json-host.invalid .cm-editor {
+  border-color: var(--vscode-inputValidation-errorBorder, var(--err));
+}
+
+.json-view .cm-editor {
+  border-radius: var(--radius);
+}
+
+.array-field > .actions select,
+.array-add-select {
+  width: auto;
+  min-width: 180px;
+}
+
+.array-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.array-item {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--vscode-focusBorder);
+  border-radius: var(--radius);
+  padding: 6px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--vscode-editorWidget-background, transparent);
+}
+
+.array-item-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+}
+
+.item-index {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  color: var(--muted);
+}
+
+.variant-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.variant-row .variant-key {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  color: var(--muted);
+}
+
+.variant-row select {
+  width: auto;
+  min-width: 160px;
+  font-weight: 600;
+}
+
+details.content-block.duplicate {
+  padding: 0;
+}
+
+details.content-block.duplicate > summary {
+  font-weight: normal;
+}
+
+.array-item.compact {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 4px 6px 4px 8px;
+}
+
+.array-item.compact > .field {
+  flex: 1;
+  min-width: 0;
+}
+
+.array-item.compact > .item-index {
+  min-width: 24px;
+  padding-top: 6px;
+}
