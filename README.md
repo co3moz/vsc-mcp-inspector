@@ -22,7 +22,7 @@ Inspect and debug [Model Context Protocol](https://modelcontextprotocol.io) serv
 
 ## Installation
 
-Search for **MCP Server Inspector** in the Extensions view, or download the `.vsix` from the [latest release](https://github.com/co3moz/vsc-mcp-inspector/releases/latest) and install it:
+Search for **MCP Server Inspector** in the Extensions view (VS Code uses the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=co3moz.vsc-mcp-inspector); VSCodium, Cursor, Windsurf and other editors use [Open VSX](https://open-vsx.org/extension/co3moz/vsc-mcp-inspector)), or download the `.vsix` from the [latest release](https://github.com/co3moz/vsc-mcp-inspector/releases/latest) and install it:
 
 ```bash
 code --install-extension vsc-mcp-inspector-<version>.vsix
@@ -109,7 +109,7 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The workflow checks that the tag matches `package.json`, builds `vsc-mcp-inspector-<version>.vsix` and, once all tests pass, attaches it to a GitHub release with generated notes and publishes it to the Visual Studio Marketplace.
+The workflow checks that the tag matches `package.json`, builds `vsc-mcp-inspector-<version>.vsix` and, once all tests pass, attaches it to a GitHub release with generated notes and publishes it to the Visual Studio Marketplace and Open VSX.
 
 #### Marketplace publishing setup
 
@@ -127,3 +127,13 @@ The `marketplace` job only runs for `v*` tags, after the build and integration t
 Create an Azure DevOps PAT with organization *All accessible organizations* and scope **Marketplace → Manage**, and store it as the `VSCE_PAT` repository secret. Azure DevOps retires these global PATs on 2026-12-01, so switch to Entra ID before then.
 
 Marketplace [trusted publishing](https://github.com/microsoft/vscode-vsce#trusted-publishing) (`vsce publish --oidc`) is supported by `vsce` but not yet enabled on the Marketplace; the workflow can switch to it once it is.
+
+#### Open VSX publishing setup
+
+The `openvsx` job runs alongside the `marketplace` job and publishes the same VSIX to [open-vsx.org](https://open-vsx.org). One-time setup:
+
+1. Create an [Eclipse account](https://accounts.eclipse.org/user/register) and fill in its *GitHub Username* with the account you will use on Open VSX.
+2. Sign in to [open-vsx.org](https://open-vsx.org) with GitHub. On your profile page click **Log in with Eclipse**, then **Show Publisher Agreement** → **Agree**.
+3. Create a token under **Settings** → [**Access Tokens**](https://open-vsx.org/user-settings/tokens) and store it as the `OVSX_PAT` repository secret.
+
+The first publish creates the `co3moz` namespace. To get the "verified" badge, [claim the namespace](https://github.com/eclipse-openvsx/openvsx/wiki/Namespace-Access). After the first version is out you can also switch to [trusted publishing](https://github.com/eclipse-openvsx/openvsx/wiki/Trusted-Publishing): register this repository and the workflow `build.yml` (environment `openvsx`) under **Settings** → **Trusted Publishers**, then delete the `OVSX_PAT` secret. The job already has `id-token: write` and `ovsx` uses OIDC whenever no token is set.

@@ -176,3 +176,46 @@ jobs:
             echo "::error::No Marketplace credentials: set the AZURE_CLIENT_ID and AZURE_TENANT_ID repository variables (Microsoft Entra ID) or the VSCE_PAT secret. See README > Marketplace publishing setup."
             exit 1
           fi
+
+  openvsx:
+    # Publishes the tested VSIX to Open VSX (VSCodium, Cursor, Windsurf, Gitpod, ...).
+    # Uses the OVSX_PAT secret and creates the namespace (package.json "publisher") on the first
+    # publish. Without OVSX_PAT, ovsx falls back to Open VSX trusted publishing (OIDC), which can be
+    # registered for this workflow once the extension exists.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, integration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: openvsx
+      url: https://open-vsx.org/extension/co3moz/vsc-mcp-inspector
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      OVSX: npx --yes ovsx@1.2.0
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.file }}
+
+      - name: Publish to Open VSX
+        env:
+          FILE: ${{ needs.build.outputs.file }}
+          PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -n "$PAT" ]; then
+            export OVSX_PAT="$PAT"
+            namespace=$(unzip -p "$FILE" extension/package.json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).publisher")
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' "https://open-vsx.org/api/$namespace")" = "404" ]; then
+              echo "Creating Open VSX namespace $namespace"
+              $OVSX create-namespace "$namespace"
+            fi
+          else
+            echo "::notice::OVSX_PAT is not set; publishing with Open VSX trusted publishing."
+          fi
+          $OVSX publish "$FILE" --skip-duplicate
