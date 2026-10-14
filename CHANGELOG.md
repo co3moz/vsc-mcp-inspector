@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- The Marketplace / Open VSX page now only covers using the extension; development and release notes moved to CONTRIBUTING.md on GitHub.
+
 ## 0.1.3
 
 - Arrays in the generated form: add, remove and reorder items, with compact rows for strings and numbers.
