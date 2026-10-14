@@ -2,7 +2,7 @@
   "name": "vsc-mcp-inspector",
   "displayName": "MCP Server Inspector",
   "description": "Connect to Model Context Protocol servers over stdio, SSE or Streamable HTTP, browse their tools, prompts and resources, and invoke them from VS Code.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "co3moz",
   "license": "MIT",
   "icon": "resources/icon.png",

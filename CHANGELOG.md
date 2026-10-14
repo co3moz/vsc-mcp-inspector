@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.5
 
 - **Search** button in the Connections view: filters tools, prompts, resources and templates by name, title or URI as you type, expands the matching groups and shows "matches of total" per group. **Clear Search** removes the filter.
 - **Change Sort Order** button: list items in the server's order (default) or by name, A → Z or Z → A. Saved in the new `mcpInspector.sortOrder` setting.
