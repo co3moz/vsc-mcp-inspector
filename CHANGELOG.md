@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Also published to [Open VSX](https://open-vsx.org/extension/co3moz/vsc-mcp-inspector) for VSCodium, Cursor, Windsurf and other editors.
+
 ## 0.1.1
 
 - Renamed to **MCP Server Inspector** on the Marketplace ("MCP Inspector" is taken by another extension). The activity bar view keeps the short name.
