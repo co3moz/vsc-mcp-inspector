@@ -57,7 +57,7 @@ describe('stdio transport', () => {
     assert.equal(session.instructions, 'Test server for the VS Code MCP Inspector.');
     assert.deepEqual(
       session.tools.map((t) => t.name).sort(),
-      ['add', 'complex_input', 'crash', 'echo', 'echo_headers', 'fail', 'get_weather', 'slow', 'tiny_image'],
+      ['add', 'automate', 'complex_input', 'crash', 'echo', 'echo_headers', 'fail', 'get_weather', 'slow', 'tiny_image'],
     );
     assert.deepEqual(session.prompts.map((p) => p.name), ['greeting']);
     assert.deepEqual(session.resources.map((r) => r.uri).sort(), ['test://logo', 'test://readme']);
@@ -77,6 +77,8 @@ describe('stdio transport', () => {
     assert.equal(image.content[1].type, 'image');
     const weather = await session.callTool('get_weather', { city: 'Istanbul', units: 'metric' });
     assert.equal((weather.structuredContent as { city: string }).city, 'Istanbul');
+    const automate = await session.callTool('automate', { actions: [{ type: 'click', x: 1, y: 2 }, { type: 'key_press', keys: ['ctrl', 'c'] }] });
+    assert.deepEqual(automate.structuredContent, { performed: 2, summary: ['click at 1,2', 'press ctrl+c'] });
     const failed = await session.callTool('fail', {});
     assert.equal(failed.isError, true);
   });
@@ -181,7 +183,7 @@ describe('HTTP transports', () => {
         try {
           await session.connect();
           assert.equal(session.status, 'connected');
-          assert.equal(session.tools.length, 9);
+          assert.equal(session.tools.length, 10);
 
           const headers = JSON.parse(textOf(await session.callTool('echo_headers', {}))!);
           assert.equal(headers['x-custom'], 'hello');

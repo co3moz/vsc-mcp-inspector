@@ -1,6 +1,7 @@
 // Builds the extension and the integration suite, then runs it inside VS Code.
 // Uses an installed VS Code when VSCODE_EXECUTABLE is set, otherwise downloads VSCODE_TEST_VERSION
 // (default: stable) into .vscode-test.
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -8,7 +9,7 @@ import { runTests } from '@vscode/test-electron';
 import * as esbuild from 'esbuild';
 
 const root = resolve('.');
-await esbuild.build({ entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js', bundle: true, format: 'cjs', platform: 'node', target: 'node20', external: ['vscode'], sourcemap: true, logLevel: 'warning' });
+execFileSync(process.execPath, ['esbuild.mjs'], { stdio: 'inherit' });
 await esbuild.build({ entryPoints: ['test/integration/suite.ts'], outfile: 'out/test/integration/suite.js', bundle: true, format: 'cjs', platform: 'node', target: 'node20', external: ['vscode'], sourcemap: 'inline', logLevel: 'warning' });
 
 // Headless Linux (CI): Ubuntu 24.04+ blocks Chromium's sandbox, and there is no keyring for SecretStorage.

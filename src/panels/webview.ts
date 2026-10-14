@@ -1,21 +1,31 @@
 import { randomBytes } from 'crypto';
 import * as vscode from 'vscode';
 
-/** Fires with the panel title once a webview's scripts have loaded and it asked for its data. */
-export const webviewReady = new vscode.EventEmitter<string>();
-
-export function mediaRoot(extensionUri: vscode.Uri): vscode.Uri {
-  return vscode.Uri.joinPath(extensionUri, 'media');
+export interface WebviewReadyEvent {
+  title: string;
+  /** Detail panels: whether the JSON editor bundle loaded. */
+  editorLoaded?: boolean;
 }
 
-/** Builds the HTML shell for a webview: CSP, shared stylesheet and scripts from /media. */
+/** Fires once a webview's scripts have loaded and it asked for its data. */
+export const webviewReady = new vscode.EventEmitter<WebviewReadyEvent>();
+
+/** Folders webviews may load files from: hand-written assets and the bundled editor. */
+export function webviewRoots(extensionUri: vscode.Uri): vscode.Uri[] {
+  return [vscode.Uri.joinPath(extensionUri, 'media'), vscode.Uri.joinPath(extensionUri, 'dist', 'webview')];
+}
+
+/**
+ * Builds the HTML shell for a webview: CSP, shared stylesheet and scripts. Script paths are relative
+ * to the extension root; media/common.js is always loaded first.
+ */
 export function renderHtml(webview: vscode.Webview, extensionUri: vscode.Uri, title: string, scripts: string[]): string {
   const nonce = randomBytes(16).toString('base64');
-  const media = mediaRoot(extensionUri);
-  const uri = (file: string) => webview.asWebviewUri(vscode.Uri.joinPath(media, file)).toString();
+  const uri = (file: string) => webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, file)).toString();
   const csp = [
     `default-src 'none'`,
-    `style-src ${webview.cspSource}`,
+    // CodeMirror injects its styles at runtime; they carry the nonce.
+    `style-src ${webview.cspSource} 'nonce-${nonce}'`,
     `font-src ${webview.cspSource}`,
     `img-src ${webview.cspSource} data: https:`,
     `media-src data:`,
@@ -27,13 +37,14 @@ export function renderHtml(webview: vscode.Webview, extensionUri: vscode.Uri, ti
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="${csp}">
+  <meta name="csp-nonce" content="${nonce}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="${uri('style.css')}">
+  <link rel="stylesheet" href="${uri('media/style.css')}">
   <title>${escapeHtml(title)}</title>
 </head>
 <body>
   <main id="app"></main>
-  ${['common.js', ...scripts].map((s) => `<script nonce="${nonce}" src="${uri(s)}"></script>`).join('\n  ')}
+  ${['media/common.js', ...scripts].map((s) => `<script nonce="${nonce}" src="${uri(s)}"></script>`).join('\n  ')}
 </body>
 </html>`;
 }

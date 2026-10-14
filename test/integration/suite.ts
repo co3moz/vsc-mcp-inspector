@@ -20,7 +20,11 @@ export async function run(): Promise<void> {
   const api = await extension.activate();
   const { manager, tree, store } = api;
   const readyWebviews: string[] = [];
-  api.onDidWebviewReady((title) => readyWebviews.push(title));
+  const editorLoaded = new Map<string, boolean | undefined>();
+  api.onDidWebviewReady(({ title, editorLoaded: loaded }) => {
+    readyWebviews.push(title);
+    editorLoaded.set(title, loaded);
+  });
   let httpServer: ChildProcess | undefined;
 
   const stdioId = 'it-stdio';
@@ -58,12 +62,12 @@ export async function run(): Promise<void> {
       const [connection] = await tree.getChildren();
       const item = tree.getTreeItem(connection);
       assert.equal(item.contextValue, 'connection-connected');
-      assert.match(String(item.description), /STDIO · 9 tools/);
+      assert.match(String(item.description), /STDIO · 10 tools/);
 
       assert.deepEqual(await labels(connection), ['Tools', 'Prompts', 'Resources', 'Resource Templates']);
       const [toolsGroup] = await tree.getChildren(connection);
       const tools = await tree.getChildren(toolsGroup);
-      assert.equal(tools.length, 9);
+      assert.equal(tools.length, 10);
       const echo = tools.find((n) => tree.getTreeItem(n).label === 'echo')!;
       const echoItem = tree.getTreeItem(echo);
       assert.equal(echoItem.description, 'Echo');
@@ -79,6 +83,7 @@ export async function run(): Promise<void> {
       await vscode.commands.executeCommand(command.command, ...(command.arguments ?? []));
       await waitFor(() => webviewTabs().includes('echo · Local test server'));
       await waitFor(() => readyWebviews.includes('echo · Local test server'), 15000);
+      assert.equal(editorLoaded.get('echo · Local test server'), true, 'JSON editor bundle loaded in the webview');
     }],
 
     ['runs a tool from the tree with the given arguments', async () => {

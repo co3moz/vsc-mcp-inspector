@@ -15,6 +15,31 @@ let running = null;
 let showParamErrors = (/** @type {string[]} */ _list) => {};
 /** Set by renderParams: returns the JSON editor text. */
 let readJsonText = () => '{}';
+/** Set by renderParams: releases the form and JSON editors before re-rendering. */
+let disposeParams = () => {};
+/** Read-only JSON viewers per section, destroyed when the section re-renders. */
+const viewers = { response: /** @type {any[]} */ ([]), schema: /** @type {any[]} */ ([]) };
+/** Pending schema validations, answered by the extension host. */
+const pendingValidations = new Map();
+
+/**
+ * Validates `text` against `schema` in the extension host (Ajv needs code generation, which the
+ * webview CSP does not allow).
+ * @param {string} text @param {any} schema @returns {Promise<any[]>}
+ */
+function validateWithHost(text, schema) {
+  return new Promise((resolve) => {
+    const requestId = uid('v');
+    pendingValidations.set(requestId, resolve);
+    vscode.postMessage({ type: 'validate', requestId, schema, text });
+    setTimeout(() => pendingValidations.delete(requestId) && resolve([]), 5000);
+  });
+}
+
+/** @param {any[]} list */
+function destroyViewers(list) {
+  list.splice(0).forEach((view) => view.destroy());
+}
 
 const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 
@@ -68,6 +93,12 @@ window.addEventListener('message', (event) => {
         finishRun(msg);
       }
       break;
+    case 'validation': {
+      const resolve = pendingValidations.get(msg.requestId);
+      pendingValidations.delete(msg.requestId);
+      resolve?.(msg.issues);
+      break;
+    }
   }
 });
 
@@ -103,7 +134,7 @@ function renderHeader() {
   if (def.mimeType) badges.push(h('span', { class: 'badge outline' }, def.mimeType));
   if (typeof def.size === 'number') badges.push(h('span', { class: 'badge outline' }, formatBytes(def.size)));
 
-  setChildren(els.header, 
+  setChildren(els.header,
     h('div', { class: 'row' },
       h('span', { class: 'badge' }, KIND_LABELS[/** @type {keyof typeof KIND_LABELS} */ (model.kind)]),
       h('span', { class: 'spacer' }),
@@ -163,7 +194,9 @@ function templateVariables(template) {
 
 /** @param {Record<string, any>} [initial] */
 function renderParams(initial) {
-  form = createSchemaForm(inputSchema(), initial);
+  disposeParams();
+  const schema = inputSchema();
+  form = createSchemaForm(schema, initial, { validate: validateWithHost, onSubmit: () => run() });
   if (form.jsonOnly) {
     mode = 'json';
   } else if (!form.hasFields) {
@@ -172,14 +205,29 @@ function renderParams(initial) {
   const heading = model.kind === 'template' ? 'URI Variables' : model.kind === 'tool' ? 'Parameters' : 'Arguments';
   const showParams = model.kind !== 'resource';
 
-  const jsonInput = /** @type {HTMLTextAreaElement} */ (autoGrow(h('textarea', {
-    class: 'code',
-    rows: 6,
-    spellcheck: 'false',
-    placeholder: '{ }',
-    'aria-label': 'Arguments as JSON',
-  })));
-  jsonInput.value = prettyJson(initial || {});
+  // The JSON editor is created the first time JSON mode is shown.
+  const jsonHost = h('div', { class: 'json-host' });
+  /** @type {any} */
+  let jsonEditor = null;
+  let jsonText = prettyJson(initial || {});
+  const getJson = () => (jsonEditor ? jsonEditor.getValue() : jsonText);
+  const setJson = (/** @type {string} */ text) => {
+    jsonText = text;
+    jsonEditor?.setValue(text);
+  };
+  const ensureJsonEditor = () => {
+    jsonEditor ??= createEditor(jsonHost, {
+      value: jsonText,
+      schema,
+      validate: validateWithHost,
+      onSubmit: () => run(),
+      ariaLabel: 'Arguments as JSON',
+      placeholder: '{ }',
+      minHeight: '140px',
+      maxHeight: '560px',
+    });
+    return jsonEditor;
+  };
   const errors = h('div', { class: 'callout err hidden', role: 'alert' });
 
   const toggle = h('div', { class: 'segmented', role: 'tablist' },
@@ -192,10 +240,10 @@ function renderParams(initial) {
       return;
     }
     if (next === 'json') {
-      jsonInput.value = prettyJson(form?.read().value ?? {});
+      setJson(prettyJson(form?.read().value ?? {}));
     } else {
       try {
-        const value = JSON.parse(jsonInput.value || '{}');
+        const value = JSON.parse(getJson() || '{}');
         if (!isPlainObject(value)) {
           throw new Error('Arguments must be a JSON object.');
         }
@@ -214,8 +262,9 @@ function renderParams(initial) {
   function renderBody() {
     toggle.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', String((i === 0) === (mode === 'form'))));
     if (mode === 'json') {
-      setChildren(body, jsonInput, h('span', { class: 'hint' }, 'Sent as the "arguments" object of the request.'));
-      requestAnimationFrame(() => jsonInput.dispatchEvent(new Event('input')));
+      setChildren(body, jsonHost,
+        h('span', { class: 'hint' }, 'Sent as the "arguments" object of the request. ', h('span', { class: 'kbd' }, 'Ctrl'), ' + ', h('span', { class: 'kbd' }, 'Space'), ' suggests properties and values from the schema.'));
+      requestAnimationFrame(() => ensureJsonEditor().focus());
     } else if (form?.hasFields) {
       setChildren(body, /** @type {HTMLElement} */ (form.element));
     } else {
@@ -231,12 +280,12 @@ function renderParams(initial) {
     class: 'ghost',
     onclick: () => {
       form?.write({});
-      jsonInput.value = '{}';
+      setJson('{}');
       showErrors([]);
     },
   }, 'Clear');
 
-  setChildren(els.params, 
+  setChildren(els.params,
     showParams
       ? h('div', { class: 'section-head' }, h('h2', null, heading), h('span', { class: 'spacer' }), form.hasFields || model.kind === 'tool' ? toggle : null)
       : null,
@@ -253,7 +302,11 @@ function renderParams(initial) {
   }
 
   showParamErrors = showErrors;
-  readJsonText = () => jsonInput.value;
+  readJsonText = getJson;
+  disposeParams = () => {
+    form?.dispose();
+    jsonEditor?.destroy();
+  };
 }
 
 /**
@@ -300,6 +353,7 @@ function run() {
     return;
   }
   showParamErrors([]);
+  destroyViewers(viewers.response);
   const runId = uid('run');
   const started = Date.now();
   running = { runId, started, timer: 0 };
@@ -310,7 +364,7 @@ function run() {
   running.timer = window.setInterval(() => {
     elapsed.textContent = `${((Date.now() - started) / 1000).toFixed(1)} s`;
   }, 100);
-  setChildren(els.response, 
+  setChildren(els.response,
     h('div', { class: 'section-head' }, h('h2', null, 'Response'), h('span', { class: 'spacer' }),
       h('span', { class: 'row' }, h('span', { class: 'spinner' }), model.connection.status === 'connected' ? 'Running…' : 'Connecting…', elapsed)),
     h('div', { class: 'progress hidden', id: 'progress' }, h('div', { class: 'progress-track' }, h('div', { class: 'progress-bar' })), h('span', { class: 'hint' })),
@@ -373,12 +427,17 @@ function finishRun(msg) {
     body = renderResourceResult(msg.result);
   }
 
-  setChildren(els.response, 
+  setChildren(els.response,
     h('div', { class: 'section-head' }, h('h2', null, 'Response'), h('span', { class: 'spacer' }),
       h('span', { class: 'result-meta' }, status, h('span', { class: 'muted' }, formatDuration(msg.durationMs)), h('span', { class: 'muted' }, new Date().toLocaleTimeString()))),
     msg.uri ? h('div', { class: 'hint' }, 'URI: ', h('code', null, msg.uri)) : null,
     body,
-    msg.ok ? jsonDetails('Raw response', msg.result) : null,
+    msg.ok
+      ? jsonDetails('Raw result', msg.result, viewers.response, {
+        hint: 'The whole "result" object of the JSON-RPC response, as sent by the server. Long strings are shortened here; Copy and Open in Editor use the full text.',
+        truncate: true,
+      })
+      : null,
   );
 }
 
@@ -393,11 +452,26 @@ function renderToolResult(result) {
     out.push(h('div', { class: 'callout err' }, 'The tool reported an error (isError: true).'));
   }
   const content = Array.isArray(result.content) ? result.content : [];
-  content.forEach((block, i) => out.push(renderContentBlock(block, content.length > 1 ? `#${i + 1}` : '')));
-  if (result.structuredContent !== undefined) {
+  const structured = result.structuredContent;
+  content.forEach((block, i) => {
+    const label = content.length > 1 ? `#${i + 1}` : '';
+    // Tools with an output schema usually repeat structuredContent as JSON text for older clients.
+    if (structured !== undefined && block?.type === 'text' && sameJson(block.text, structured)) {
+      out.push(h('details', { class: 'content-block duplicate' },
+        h('summary', null, h('span', { class: 'badge outline' }, 'text'), label ? ` ${label}` : '', h('span', { class: 'muted' }, ' — same JSON as structuredContent')),
+        h('div', { class: 'details-body' }, h('pre', null, block.text))));
+      return;
+    }
+    out.push(renderContentBlock(block, label));
+  });
+  if (structured !== undefined) {
+    const json = prettyJson(structured);
     out.push(h('div', { class: 'content-block' },
-      h('div', { class: 'content-block-head' }, h('span', { class: 'badge outline' }, 'structuredContent'), h('span', { class: 'spacer' }), copyButton(prettyJson(result.structuredContent))),
-      h('pre', null, prettyJson(result.structuredContent))));
+      h('div', { class: 'content-block-head' },
+        h('span', { class: 'badge outline' }, 'structuredContent'),
+        h('span', { class: 'muted' }, 'machine-readable result'),
+        h('span', { class: 'spacer' }), copyButton(json), openButton(json, 'json')),
+      jsonViewer(json, viewers.response)));
   }
   if (!content.length && result.structuredContent === undefined) {
     out.push(h('p', { class: 'empty-state' }, 'The tool returned no content.'));
@@ -441,8 +515,10 @@ function renderContentBlock(block, label, prefix) {
 
   switch (type) {
     case 'text': {
-      const text = formatText(block.text ?? '');
-      return h('div', { class: 'content-block' }, head(h('span', { class: 'spacer' }), copyButton(block.text ?? '')), h('pre', null, text));
+      const json = asJson(block.text ?? '');
+      return h('div', { class: 'content-block' },
+        head(json !== null ? h('span', { class: 'muted' }, 'JSON') : null, h('span', { class: 'spacer' }), copyButton(block.text ?? ''), json !== null ? openButton(json, 'json') : null),
+        json !== null ? jsonViewer(json, viewers.response) : h('pre', null, block.text ?? ''));
     }
     case 'image':
       return h('div', { class: 'content-block' }, head(h('span', null, block.mimeType)), mediaElement('img', block.mimeType, block.data));
@@ -468,7 +544,8 @@ function resourceContents(c) {
     typeof c.text === 'string' ? copyButton(c.text) : null,
     typeof c.text === 'string' ? openButton(c.text, languageFor(c.mimeType, c.uri)) : null);
   if (typeof c.text === 'string') {
-    return [head, h('pre', null, formatText(c.text))];
+    const json = asJson(c.text);
+    return [head, json !== null ? jsonViewer(json, viewers.response) : h('pre', null, c.text)];
   }
   if (typeof c.blob === 'string') {
     const mime = c.mimeType || '';
@@ -487,14 +564,88 @@ function mediaElement(tag, mime, data) {
   return tag === 'img' ? h('img', { src, alt: 'Image returned by the server' }) : h('audio', { src, controls: true });
 }
 
-/** @param {string} title @param {unknown} value */
-function jsonDetails(title, value) {
+/**
+ * Collapsible read-only JSON viewer; the editor is created when it is first opened.
+ * @param {string} title @param {unknown} value @param {any[]} registry
+ * @param {{ hint?: string, truncate?: boolean }} [options]
+ */
+function jsonDetails(title, value, registry, options = {}) {
   const json = prettyJson(value);
-  return h('details', null,
-    h('summary', null, title),
-    h('div', { class: 'details-body' },
-      h('div', { class: 'actions' }, copyButton(json), openButton(json, 'json')),
-      h('pre', null, json)));
+  const body = h('div', { class: 'details-body' },
+    h('div', { class: 'actions' }, copyButton(json), openButton(json, 'json'), options.hint ? h('span', { class: 'hint' }, options.hint) : null));
+  let rendered = false;
+  const details = h('details', {
+    ontoggle: () => {
+      if (details.open && !rendered) {
+        rendered = true;
+        body.append(jsonViewer(options.truncate ? prettyJson(shortenStrings(value)) : json, registry));
+      }
+    },
+  }, h('summary', null, title), body);
+  return details;
+}
+
+/**
+ * Read-only, foldable JSON view (falls back to <pre> without the editor bundle).
+ * @param {string} text @param {any[]} registry
+ */
+function jsonViewer(text, registry) {
+  const host = h('div', { class: 'json-view' });
+  const factory = /** @type {any} */ (window).McpJsonEditor;
+  if (!factory) {
+    host.append(h('pre', null, text));
+    return host;
+  }
+  registry.push(factory.create(host, { value: text, readOnly: true, maxHeight: '480px', ariaLabel: 'JSON' }));
+  return host;
+}
+
+/** Replaces very long strings (base64 payloads) with a short preview. @param {unknown} value @returns {unknown} */
+function shortenStrings(value) {
+  if (typeof value === 'string') {
+    return value.length > 1000 ? `${value.slice(0, 120)}… [${value.length} characters]` : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(shortenStrings);
+  }
+  if (isPlainObject(value)) {
+    return Object.fromEntries(Object.entries(/** @type {Record<string, unknown>} */ (value)).map(([k, v]) => [k, shortenStrings(v)]));
+  }
+  return value;
+}
+
+/** Pretty JSON text when `text` is a JSON object or array, otherwise null. @param {string} text */
+function asJson(text) {
+  const trimmed = text.trim();
+  if (!/^[[{]/.test(trimmed)) {
+    return null;
+  }
+  try {
+    return prettyJson(JSON.parse(trimmed));
+  } catch {
+    return null;
+  }
+}
+
+/** @param {string} text @param {unknown} value */
+function sameJson(text, value) {
+  try {
+    return canonical(JSON.parse(text)) === canonical(value);
+  } catch {
+    return false;
+  }
+}
+
+/** JSON with sorted keys, for order-insensitive comparison. @param {unknown} value @returns {string} */
+function canonical(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonical).join(',')}]`;
+  }
+  if (isPlainObject(value)) {
+    const entries = Object.entries(/** @type {Record<string, unknown>} */ (value)).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 /** @param {string} text @param {string} [label] */
@@ -513,34 +664,22 @@ function openButton(content, language) {
 
 function renderSchema() {
   const def = model.definition;
+  destroyViewers(viewers.schema);
   if (!def) {
     setChildren(els.schema);
     return;
   }
-  setChildren(els.schema, 
+  setChildren(els.schema,
     h('div', { class: 'section-head' }, h('h2', null, 'Definition')),
-    model.kind === 'tool' ? jsonDetails('Input schema', def.inputSchema ?? {}) : null,
-    model.kind === 'tool' && def.outputSchema ? jsonDetails('Output schema', def.outputSchema) : null,
-    jsonDetails(`Full ${KIND_LABELS[/** @type {keyof typeof KIND_LABELS} */ (model.kind)].toLowerCase()} definition`, def),
+    model.kind === 'tool' ? jsonDetails('Input schema', def.inputSchema ?? {}, viewers.schema) : null,
+    model.kind === 'tool' && def.outputSchema ? jsonDetails('Output schema', def.outputSchema, viewers.schema) : null,
+    jsonDetails(`Full ${KIND_LABELS[/** @type {keyof typeof KIND_LABELS} */ (model.kind)].toLowerCase()} definition`, def, viewers.schema),
   );
 }
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
 // ---------------------------------------------------------------------------
-
-/** Pretty prints JSON text, leaves anything else untouched. @param {string} text */
-function formatText(text) {
-  const trimmed = text.trim();
-  if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-    try {
-      return prettyJson(JSON.parse(trimmed));
-    } catch {
-      // not JSON
-    }
-  }
-  return text;
-}
 
 /** @param {string | undefined} mime @param {string | undefined} uri */
 function languageFor(mime, uri) {
@@ -570,4 +709,4 @@ function formatBytes(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-vscode.postMessage({ type: 'ready' });
+vscode.postMessage({ type: 'ready', editorLoaded: typeof (/** @type {any} */ (window).McpJsonEditor) !== 'undefined' });

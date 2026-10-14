@@ -4,7 +4,7 @@ import { TRANSPORT_LABELS, type ItemKind } from './core/types';
 import { ConnectionManager } from './manager';
 import { ConnectionPanel } from './panels/connectionPanel';
 import { DetailPanel } from './panels/detailPanel';
-import { errorMessage, webviewReady } from './panels/webview';
+import { errorMessage, webviewReady, type WebviewReadyEvent } from './panels/webview';
 import { ConnectionStore } from './store';
 import { ConnectionsTreeProvider, type Node } from './tree';
 
@@ -13,7 +13,7 @@ export interface ExtensionApi {
   manager: ConnectionManager;
   tree: ConnectionsTreeProvider;
   store: ConnectionStore;
-  onDidWebviewReady: vscode.Event<string>;
+  onDidWebviewReady: vscode.Event<WebviewReadyEvent>;
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<ExtensionApi> {

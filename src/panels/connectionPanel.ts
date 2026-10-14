@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import type { ConnectionConfig, KeyValue, TransportType } from '../core/types';
 import type { ConnectionManager } from '../manager';
-import { errorMessage, mediaRoot, renderHtml, webviewReady } from './webview';
+import { errorMessage, renderHtml, webviewReady, webviewRoots } from './webview';
 
 type InboundMessage =
   | { type: 'ready' }
@@ -42,9 +42,9 @@ export class ConnectionPanel {
     this.panel = vscode.window.createWebviewPanel('mcpInspector.connection', title, vscode.ViewColumn.Active, {
       enableScripts: true,
       retainContextWhenHidden: true,
-      localResourceRoots: [mediaRoot(extensionUri)],
+      localResourceRoots: webviewRoots(extensionUri),
     });
-    this.panel.webview.html = renderHtml(this.panel.webview, extensionUri, title, ['connection.js']);
+    this.panel.webview.html = renderHtml(this.panel.webview, extensionUri, title, ['media/connection.js']);
     this.panel.webview.onDidReceiveMessage((msg: InboundMessage) => this.onMessage(msg));
     this.panel.onDidDispose(() => ConnectionPanel.panels.delete(this.key));
   }
@@ -57,7 +57,7 @@ export class ConnectionPanel {
     switch (msg.type) {
       case 'ready':
         this.post({ type: 'init', mode: this.existing ? 'edit' : 'create', config: this.existing });
-        webviewReady.fire(this.panel.title);
+        webviewReady.fire({ title: this.panel.title });
         return;
       case 'cancel':
         this.panel.dispose();

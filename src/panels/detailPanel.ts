@@ -3,14 +3,16 @@ import * as vscode from 'vscode';
 import type { McpSession } from '../core/session';
 import { TRANSPORT_LABELS, type ItemKind } from '../core/types';
 import type { ConnectionManager } from '../manager';
-import { errorMessage, mediaRoot, renderHtml, webviewReady } from './webview';
+import { validateJson } from '../schemaValidation';
+import { errorMessage, renderHtml, webviewReady, webviewRoots } from './webview';
 
 type InboundMessage =
-  | { type: 'ready' }
+  | { type: 'ready'; editorLoaded?: boolean }
   | { type: 'run'; runId: string; args: Record<string, unknown> }
   | { type: 'cancel'; runId: string }
   | { type: 'copy'; text: string }
-  | { type: 'openInEditor'; content: string; language: string };
+  | { type: 'openInEditor'; content: string; language: string }
+  | { type: 'validate'; requestId: string; schema: Record<string, unknown>; text: string };
 
 const RUN_LABELS: Record<ItemKind, string> = {
   tool: 'Run Tool',
@@ -81,9 +83,9 @@ export class DetailPanel {
     this.panel = vscode.window.createWebviewPanel('mcpInspector.detail', title, vscode.ViewColumn.Active, {
       enableScripts: true,
       retainContextWhenHidden: true,
-      localResourceRoots: [mediaRoot(extensionUri)],
+      localResourceRoots: webviewRoots(extensionUri),
     });
-    this.panel.webview.html = renderHtml(this.panel.webview, extensionUri, title, ['schemaForm.js', 'detail.js']);
+    this.panel.webview.html = renderHtml(this.panel.webview, extensionUri, title, ['dist/webview/jsonEditor.js', 'media/schemaForm.js', 'media/detail.js']);
     this.disposables.push(
       this.panel.webview.onDidReceiveMessage((msg: InboundMessage) => this.onMessage(msg)),
       manager.onDidChange((id) => {
@@ -175,7 +177,10 @@ export class DetailPanel {
     switch (msg.type) {
       case 'ready':
         this.sendInit();
-        webviewReady.fire(this.panel.title);
+        if (!msg.editorLoaded) {
+          this.manager.log.error('The JSON editor failed to load in the detail panel (dist/webview/jsonEditor.js).');
+        }
+        webviewReady.fire({ title: this.panel.title, editorLoaded: msg.editorLoaded });
         return;
       case 'cancel':
         this.runs.get(msg.runId)?.abort();
@@ -191,6 +196,9 @@ export class DetailPanel {
       }
       case 'run':
         return this.run(msg.runId, msg.args ?? {});
+      case 'validate':
+        this.post({ type: 'validation', requestId: msg.requestId, issues: validateJson(msg.schema, msg.text) });
+        return;
     }
   }
 
