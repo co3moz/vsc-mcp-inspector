@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Search** button in the Connections view: filters tools, prompts, resources and templates by name, title or URI as you type, expands the matching groups and shows "matches of total" per group. **Clear Search** removes the filter.
+- **Change Sort Order** button: list items in the server's order (default) or by name, A → Z or Z → A. Saved in the new `mcpInspector.sortOrder` setting.
+
 ## 0.1.4
 
 - The Marketplace / Open VSX page now only covers using the extension; development and release notes moved to CONTRIBUTING.md on GitHub.

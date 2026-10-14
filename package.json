@@ -112,6 +112,24 @@
         "icon": "$(output)"
       },
       {
+        "command": "mcpInspector.search",
+        "title": "Search",
+        "category": "MCP Inspector",
+        "icon": "$(search)"
+      },
+      {
+        "command": "mcpInspector.clearSearch",
+        "title": "Clear Search",
+        "category": "MCP Inspector",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "mcpInspector.sort",
+        "title": "Change Sort Order",
+        "category": "MCP Inspector",
+        "icon": "$(sort-precedence)"
+      },
+      {
         "command": "mcpInspector.openItem",
         "title": "Open",
         "category": "MCP Inspector"
@@ -132,6 +150,10 @@
         {
           "command": "mcpInspector.runItem",
           "when": "false"
+        },
+        {
+          "command": "mcpInspector.clearSearch",
+          "when": "mcpInspector.searching"
         }
       ],
       "view/title": [
@@ -141,14 +163,29 @@
           "group": "navigation@1"
         },
         {
-          "command": "mcpInspector.refresh",
+          "command": "mcpInspector.search",
           "when": "view == mcpInspector.connections",
           "group": "navigation@2"
         },
         {
+          "command": "mcpInspector.clearSearch",
+          "when": "view == mcpInspector.connections && mcpInspector.searching",
+          "group": "navigation@3"
+        },
+        {
+          "command": "mcpInspector.sort",
+          "when": "view == mcpInspector.connections",
+          "group": "navigation@4"
+        },
+        {
+          "command": "mcpInspector.refresh",
+          "when": "view == mcpInspector.connections",
+          "group": "navigation@5"
+        },
+        {
           "command": "mcpInspector.showLogs",
           "when": "view == mcpInspector.connections",
-          "group": "navigation@3"
+          "group": "navigation@6"
         }
       ],
       "view/item/context": [
@@ -232,6 +269,21 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Log every JSON-RPC message exchanged with servers to the **MCP Inspector** output channel."
+        },
+        "mcpInspector.sortOrder": {
+          "type": "string",
+          "enum": [
+            "none",
+            "ascending",
+            "descending"
+          ],
+          "enumDescriptions": [
+            "The order the server lists them in.",
+            "By name, A to Z.",
+            "By name, Z to A."
+          ],
+          "default": "none",
+          "markdownDescription": "Order of the tools, prompts, resources and resource templates under each connection in the **Connections** view."
         }
       }
     }

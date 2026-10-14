@@ -9,25 +9,71 @@ export type Node =
   | { type: 'item'; id: string; kind: ItemKind; key: string }
   | { type: 'message'; id: string; slot: string; label: string; tooltip?: string; icon: string; command?: vscode.Command };
 
+/** Value of the `mcpInspector.sortOrder` setting: the server's order, or by label. */
+export type SortOrder = 'none' | 'ascending' | 'descending';
+
 const GROUPS: Record<ListKind, { label: string; icon: string; item: ItemKind; empty: string }> = {
   tools: { label: 'Tools', icon: 'tools', item: 'tool', empty: 'No tools' },
   prompts: { label: 'Prompts', icon: 'comment-discussion', item: 'prompt', empty: 'No prompts' },
   resources: { label: 'Resources', icon: 'files', item: 'resource', empty: 'No resources' },
   templates: { label: 'Resource Templates', icon: 'file-symlink-file', item: 'template', empty: 'No resource templates' },
 };
+const LISTS = Object.keys(GROUPS) as ListKind[];
+
+/** An item of a list: its key, the label shown in the tree (used for sorting) and other text a search matches. */
+interface Entry {
+  key: string;
+  label: string;
+  also: (string | undefined)[];
+}
+
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+export function sortOrder(): SortOrder {
+  return vscode.workspace.getConfiguration('mcpInspector').get<SortOrder>('sortOrder', 'none');
+}
 
 export class ConnectionsTreeProvider implements vscode.TreeDataProvider<Node>, vscode.Disposable {
   private readonly changeEmitter = new vscode.EventEmitter<Node | undefined>();
   readonly onDidChangeTreeData = this.changeEmitter.event;
-  private readonly subscription: vscode.Disposable;
+  private readonly subscriptions: vscode.Disposable[];
+  private query = '';
 
   constructor(private readonly manager: ConnectionManager) {
-    this.subscription = manager.onDidChange(() => this.changeEmitter.fire(undefined));
+    this.subscriptions = [
+      manager.onDidChange(() => this.changeEmitter.fire(undefined)),
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('mcpInspector.sortOrder')) {
+          this.changeEmitter.fire(undefined);
+        }
+      }),
+    ];
   }
 
   dispose(): void {
-    this.subscription.dispose();
+    this.subscriptions.forEach((s) => s.dispose());
     this.changeEmitter.dispose();
+  }
+
+  /** Text that items must contain (case-insensitive) to be shown; empty shows everything. */
+  get filter(): string {
+    return this.query;
+  }
+
+  setFilter(text: string): void {
+    const query = text.trim();
+    if (query !== this.query) {
+      this.query = query;
+      this.changeEmitter.fire(undefined);
+    }
+  }
+
+  /** Number of items matching the filter on all connected servers. */
+  matchCount(): number {
+    return this.manager
+      .list()
+      .filter((s) => s.status === 'connected')
+      .reduce((count, session) => count + LISTS.reduce((n, list) => n + this.matches(session, list).length, 0), 0);
   }
 
   async getChildren(node?: Node): Promise<Node[]> {
@@ -42,8 +88,8 @@ export class ConnectionsTreeProvider implements vscode.TreeDataProvider<Node>, v
       return this.connectionChildren(session);
     }
     if (node.type === 'group') {
-      const items = this.itemKeys(session, node.list).map((key): Node => ({ type: 'item', id: node.id, kind: GROUPS[node.list].item, key }));
-      return items.length ? items : [message(node.id, `${node.list}-empty`, GROUPS[node.list].empty, 'info')];
+      const items = this.visibleKeys(session, node.list).map((key): Node => ({ type: 'item', id: node.id, kind: GROUPS[node.list].item, key }));
+      return items.length ? items : [message(node.id, `${node.list}-empty`, this.query ? 'No matches' : GROUPS[node.list].empty, 'info')];
     }
     return [];
   }
@@ -52,9 +98,9 @@ export class ConnectionsTreeProvider implements vscode.TreeDataProvider<Node>, v
     const session = this.manager.get(node.id);
     switch (node.type) {
       case 'connection':
-        return session ? connectionItem(session) : new vscode.TreeItem('?');
+        return session ? connectionItem(session, !!this.query) : new vscode.TreeItem('?');
       case 'group':
-        return session ? groupItem(session, node.list) : new vscode.TreeItem('?');
+        return session ? groupItem(session, node.list, this.query ? this.matches(session, node.list).length : undefined) : new vscode.TreeItem('?');
       case 'item':
         return session ? itemTreeItem(session, node.kind, node.key) : new vscode.TreeItem(node.key);
       case 'message': {
@@ -108,20 +154,44 @@ export class ConnectionsTreeProvider implements vscode.TreeDataProvider<Node>, v
         groups.push({ type: 'group', id, list: 'templates' });
       }
     }
-    return groups.length ? groups : [message(id, 'nothing', 'Server exposes no tools, prompts or resources', 'info')];
+    if (!groups.length) {
+      return [message(id, 'nothing', 'Server exposes no tools, prompts or resources', 'info')];
+    }
+    if (!this.query) {
+      return groups;
+    }
+    const matching = groups.filter((g) => g.type === 'group' && this.matches(session, g.list).length);
+    return matching.length ? matching : [message(id, 'no-matches', `No matches for “${this.query}”`, 'search')];
   }
 
-  private itemKeys(session: McpSession, list: ListKind): string[] {
-    switch (list) {
-      case 'tools':
-        return session.tools.map((t) => t.name);
-      case 'prompts':
-        return session.prompts.map((p) => p.name);
-      case 'resources':
-        return session.resources.map((r) => r.uri);
-      case 'templates':
-        return session.templates.map((t) => t.uriTemplate);
+  /** Keys of the items to show: those matching the filter, in the configured order. */
+  private visibleKeys(session: McpSession, list: ListKind): string[] {
+    const entries = this.matches(session, list);
+    const order = sortOrder();
+    if (order !== 'none') {
+      const sign = order === 'descending' ? -1 : 1;
+      entries.sort((a, b) => sign * collator.compare(a.label, b.label));
     }
+    return entries.map((e) => e.key);
+  }
+
+  private matches(session: McpSession, list: ListKind): Entry[] {
+    const query = this.query.toLowerCase();
+    const all = entries(session, list);
+    return query ? all.filter((e) => [e.label, ...e.also].some((text) => text?.toLowerCase().includes(query))) : all;
+  }
+}
+
+function entries(session: McpSession, list: ListKind): Entry[] {
+  switch (list) {
+    case 'tools':
+      return session.tools.map((t) => ({ key: t.name, label: t.name, also: [t.title, t.annotations?.title] }));
+    case 'prompts':
+      return session.prompts.map((p) => ({ key: p.name, label: p.name, also: [p.title] }));
+    case 'resources':
+      return session.resources.map((r) => ({ key: r.uri, label: r.title ?? r.name, also: [r.name, r.uri] }));
+    case 'templates':
+      return session.templates.map((t) => ({ key: t.uriTemplate, label: t.title ?? t.name, also: [t.name, t.uriTemplate] }));
   }
 }
 
@@ -129,13 +199,14 @@ function message(id: string, slot: string, label: string, icon: string, tooltip?
   return { type: 'message', id, slot, label, icon, tooltip, command };
 }
 
-function connectionItem(session: McpSession): vscode.TreeItem {
+function connectionItem(session: McpSession, searching: boolean): vscode.TreeItem {
   const { config, status } = session;
   const item = new vscode.TreeItem(
     config.name,
     status === 'connected' ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
   );
-  item.id = config.id;
+  // VS Code keeps the expanded state per id; a separate id while searching shows the matches even if the user collapsed it.
+  item.id = searching && status === 'connected' ? `${config.id}/search` : config.id;
   item.contextValue = `connection-${status}`;
 
   const transport = TRANSPORT_LABELS[config.transport];
@@ -176,13 +247,15 @@ function connectionItem(session: McpSession): vscode.TreeItem {
   return item;
 }
 
-function groupItem(session: McpSession, list: ListKind): vscode.TreeItem {
+/** `matches` is the number of items matching the search, undefined when not searching. */
+function groupItem(session: McpSession, list: ListKind, matches?: number): vscode.TreeItem {
   const group = GROUPS[list];
+  const searching = matches !== undefined;
   const item = new vscode.TreeItem(
     group.label,
-    list === 'tools' ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
+    list === 'tools' || searching ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
   );
-  item.id = `${session.config.id}/${list}`;
+  item.id = `${session.config.id}/${list}${searching ? '/search' : ''}`;
   item.contextValue = `group-${list}`;
   const error = session.listErrors[list];
   if (error) {
@@ -190,7 +263,7 @@ function groupItem(session: McpSession, list: ListKind): vscode.TreeItem {
     item.tooltip = error;
     item.iconPath = new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
   } else {
-    item.description = String(session[list].length);
+    item.description = searching ? `${matches} of ${session[list].length}` : String(session[list].length);
     item.iconPath = new vscode.ThemeIcon(group.icon);
   }
   return item;

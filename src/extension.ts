@@ -6,7 +6,13 @@ import { ConnectionPanel } from './panels/connectionPanel';
 import { DetailPanel } from './panels/detailPanel';
 import { errorMessage, webviewReady, type WebviewReadyEvent } from './panels/webview';
 import { ConnectionStore } from './store';
-import { ConnectionsTreeProvider, type Node } from './tree';
+import { ConnectionsTreeProvider, sortOrder, type Node, type SortOrder } from './tree';
+
+const SORT_ORDERS: { order: SortOrder; label: string }[] = [
+  { order: 'none', label: 'Server Order' },
+  { order: 'ascending', label: 'Name (A → Z)' },
+  { order: 'descending', label: 'Name (Z → A)' },
+];
 
 /** Returned from activate() so integration tests can drive the extension. */
 export interface ExtensionApi {
@@ -23,6 +29,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
   const tree = new ConnectionsTreeProvider(manager);
   const view = vscode.window.createTreeView('mcpInspector.connections', { treeDataProvider: tree, showCollapseAll: true });
   context.subscriptions.push(log, manager, tree, view, webviewReady);
+  context.subscriptions.push(
+    tree.onDidChangeTreeData(() => {
+      const query = tree.filter;
+      void vscode.commands.executeCommand('setContext', 'mcpInspector.searching', !!query);
+      const count = query ? tree.matchCount() : 0;
+      view.message = !query ? undefined : count ? `${count} match${count === 1 ? '' : 'es'} for “${query}”` : `No matches for “${query}”`;
+    }),
+  );
   await manager.init();
 
   /** Resolves the session a command targets: the clicked tree node, or a quick pick from the palette. */
@@ -145,6 +159,45 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
   });
 
   register('mcpInspector.showLogs', () => log.show());
+
+  /** Filters the tree as the user types; the filter stays after the input closes until it is cleared. */
+  register('mcpInspector.search', (query?: string) => {
+    if (typeof query === 'string') {
+      tree.setFilter(query);
+      return;
+    }
+    const input = vscode.window.createInputBox();
+    input.placeholder = 'Search tools, prompts and resources';
+    input.value = tree.filter;
+    input.buttons = [{ iconPath: new vscode.ThemeIcon('clear-all'), tooltip: 'Clear Search' }];
+    input.onDidChangeValue((value) => tree.setFilter(value));
+    input.onDidTriggerButton(() => {
+      tree.setFilter('');
+      input.hide();
+    });
+    input.onDidAccept(() => input.hide());
+    input.onDidHide(() => input.dispose());
+    input.show();
+  });
+
+  register('mcpInspector.clearSearch', () => tree.setFilter(''));
+
+  register('mcpInspector.sort', async (order?: SortOrder) => {
+    const current = sortOrder();
+    if (typeof order !== 'string') {
+      const picked = await vscode.window.showQuickPick(
+        SORT_ORDERS.map((o) => ({ label: `$(${o.order === current ? 'check' : 'blank'}) ${o.label}`, order: o.order })),
+        { placeHolder: 'Sort tools, prompts and resources by' },
+      );
+      order = picked?.order;
+    }
+    if (order && order !== current) {
+      const config = vscode.workspace.getConfiguration('mcpInspector');
+      // Write where the current value comes from, so a workspace setting does not hide the change.
+      const target = config.inspect('sortOrder')?.workspaceValue !== undefined ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+      await config.update('sortOrder', order, target);
+    }
+  });
 
   /** Accepts a tree node (context menu) or explicit (connectionId, kind, key, args?) arguments. */
   const openItem = (run: boolean) => (target?: Node | string, kind?: ItemKind, key?: string, args?: Record<string, unknown>) => {
